@@ -1,5 +1,5 @@
 import asyncHandler from 'express-async-handler';
-import Panelist from '../models/panelistModel.js';
+import { db } from '../config/firebase.js';
 
 // @desc    Add new SMS panelist
 // @route   POST /api/panels
@@ -17,15 +17,18 @@ export const addSMSPanelist = asyncHandler(async (req, res) => {
   } = req.body;
 
   // Check if panelist exists
-  const panelistExists = await Panelist.findOne({ phone, type: 'sms' });
+  const panelistQuery = await db.collection('panelists')
+    .where('phone', '==', phone)
+    .where('type', '==', 'sms')
+    .get();
 
-  if (panelistExists) {
+  if (!panelistQuery.empty) {
     res.status(400);
     throw new Error('Panelist already exists');
   }
 
   // Create panelist
-  const panelist = await Panelist.create({
+  const panelistData = {
     phone,
     firstName,
     lastName,
@@ -36,10 +39,20 @@ export const addSMSPanelist = asyncHandler(async (req, res) => {
     consentStatus,
     consentDate: consentStatus ? new Date() : null,
     type: 'sms',
-  });
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    status: 'active',
+    participationHistory: []
+  };
 
-  if (panelist) {
-    res.status(201).json(panelist);
+  const panelistRef = await db.collection('panelists').add(panelistData);
+  const panelist = await panelistRef.get();
+
+  if (panelist.exists) {
+    res.status(201).json({
+      id: panelist.id,
+      ...panelist.data()
+    });
   } else {
     res.status(400);
     throw new Error('Invalid panelist data');
@@ -52,17 +65,25 @@ export const addSMSPanelist = asyncHandler(async (req, res) => {
 export const getPanelists = asyncHandler(async (req, res) => {
   const { type, status } = req.query;
   
-  let query = {};
+  let query = db.collection('panelists');
   
   if (type) {
-    query.type = type;
+    query = query.where('type', '==', type);
   }
   
   if (status) {
-    query.status = status;
+    query = query.where('status', '==', status);
   }
   
-  const panelists = await Panelist.find(query).sort({ createdAt: -1 });
+  const snapshot = await query.orderBy('createdAt', 'desc').get();
+  const panelists = [];
+  
+  snapshot.forEach(doc => {
+    panelists.push({
+      id: doc.id,
+      ...doc.data()
+    });
+  });
   
   res.json(panelists);
 });
@@ -71,10 +92,13 @@ export const getPanelists = asyncHandler(async (req, res) => {
 // @route   GET /api/panels/:id
 // @access  Private
 export const getPanelistById = asyncHandler(async (req, res) => {
-  const panelist = await Panelist.findById(req.params.id);
+  const panelist = await db.collection('panelists').doc(req.params.id).get();
 
-  if (panelist) {
-    res.json(panelist);
+  if (panelist.exists) {
+    res.json({
+      id: panelist.id,
+      ...panelist.data()
+    });
   } else {
     res.status(404);
     throw new Error('Panelist not found');
@@ -85,9 +109,10 @@ export const getPanelistById = asyncHandler(async (req, res) => {
 // @route   PUT /api/panels/:id
 // @access  Private/Manager/Admin
 export const updatePanelist = asyncHandler(async (req, res) => {
-  const panelist = await Panelist.findById(req.params.id);
+  const panelistRef = db.collection('panelists').doc(req.params.id);
+  const panelist = await panelistRef.get();
 
-  if (panelist) {
+  if (panelist.exists) {
     const {
       firstName,
       lastName,
@@ -99,24 +124,31 @@ export const updatePanelist = asyncHandler(async (req, res) => {
       status,
     } = req.body;
 
-    panelist.firstName = firstName || panelist.firstName;
-    panelist.lastName = lastName || panelist.lastName;
-    panelist.email = email || panelist.email;
-    panelist.age = age || panelist.age;
-    panelist.gender = gender || panelist.gender;
-    panelist.location = location || panelist.location;
-    
-    if (consentStatus !== undefined && consentStatus !== panelist.consentStatus) {
-      panelist.consentStatus = consentStatus;
+    const updateData = {
+      ...(firstName && { firstName }),
+      ...(lastName && { lastName }),
+      ...(email && { email }),
+      ...(age && { age }),
+      ...(gender && { gender }),
+      ...(location && { location }),
+      ...(status && { status }),
+      updatedAt: new Date()
+    };
+
+    if (consentStatus !== undefined && consentStatus !== panelist.data().consentStatus) {
+      updateData.consentStatus = consentStatus;
       if (consentStatus) {
-        panelist.consentDate = new Date();
+        updateData.consentDate = new Date();
       }
     }
-    
-    panelist.status = status || panelist.status;
 
-    const updatedPanelist = await panelist.save();
-    res.json(updatedPanelist);
+    await panelistRef.update(updateData);
+    
+    const updatedPanelist = await panelistRef.get();
+    res.json({
+      id: updatedPanelist.id,
+      ...updatedPanelist.data()
+    });
   } else {
     res.status(404);
     throw new Error('Panelist not found');
@@ -127,10 +159,11 @@ export const updatePanelist = asyncHandler(async (req, res) => {
 // @route   DELETE /api/panels/:id
 // @access  Private/Manager/Admin
 export const deletePanelist = asyncHandler(async (req, res) => {
-  const panelist = await Panelist.findById(req.params.id);
+  const panelistRef = db.collection('panelists').doc(req.params.id);
+  const panelist = await panelistRef.get();
 
-  if (panelist) {
-    await panelist.deleteOne();
+  if (panelist.exists) {
+    await panelistRef.delete();
     res.json({ message: 'Panelist removed' });
   } else {
     res.status(404);
@@ -171,16 +204,23 @@ export const exportPanelists = asyncHandler(async (req, res) => {
 // @route   POST /api/panels/:id/opt-out
 // @access  Private
 export const optOutPanelist = asyncHandler(async (req, res) => {
-  const panelist = await Panelist.findById(req.params.id);
+  const panelistRef = db.collection('panelists').doc(req.params.id);
+  const panelist = await panelistRef.get();
 
-  if (panelist) {
-    panelist.status = 'opted_out';
-    const updatedPanelist = await panelist.save();
+  if (panelist.exists) {
+    await panelistRef.update({
+      status: 'opted_out',
+      updatedAt: new Date()
+    });
     
+    const updatedPanelist = await panelistRef.get();
     res.json({
       success: true,
       message: 'Panelist has been opted out successfully',
-      panelist: updatedPanelist,
+      panelist: {
+        id: updatedPanelist.id,
+        ...updatedPanelist.data()
+      }
     });
   } else {
     res.status(404);
