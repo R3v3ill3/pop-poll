@@ -1,89 +1,19 @@
 import asyncHandler from 'express-async-handler';
-import User from '../models/userModel.js';
-import jwt from 'jsonwebtoken';
-
-// Generate JWT
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'abc123', {
-    expiresIn: '30d',
-  });
-};
-
-// @desc    Register a new user
-// @route   POST /api/users
-// @access  Public
-export const registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body;
-
-  if (!name || !email || !password) {
-    res.status(400);
-    throw new Error('Please add all fields');
-  }
-
-  // Check if user exists
-  const userExists = await User.findOne({ email });
-
-  if (userExists) {
-    res.status(400);
-    throw new Error('User already exists');
-  }
-
-  // Create user
-  const user = await User.create({
-    name,
-    email,
-    password,
-  });
-
-  if (user) {
-    res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      token: generateToken(user._id),
-    });
-  } else {
-    res.status(400);
-    throw new Error('Invalid user data');
-  }
-});
-
-// @desc    Authenticate a user
-// @route   POST /api/users/login
-// @access  Public
-export const loginUser = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
-
-  // Check for user email
-  const user = await User.findOne({ email });
-
-  if (user && (await user.matchPassword(password))) {
-    res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      token: generateToken(user._id),
-    });
-  } else {
-    res.status(401);
-    throw new Error('Invalid email or password');
-  }
-});
+import { auth, db } from '../config/firebase.js';
 
 // @desc    Get user profile
 // @route   GET /api/users/profile
 // @access  Private
 export const getUserProfile = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id);
-
-  if (user) {
+  const userDoc = await db.collection('users').doc(req.user.uid).get();
+  
+  if (userDoc.exists) {
+    const userData = userDoc.data();
     res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
+      uid: req.user.uid,
+      name: userData.name,
+      email: userData.email,
+      role: userData.role
     });
   } else {
     res.status(404);
@@ -95,24 +25,38 @@ export const getUserProfile = asyncHandler(async (req, res) => {
 // @route   PUT /api/users/profile
 // @access  Private
 export const updateUserProfile = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id);
+  const userRef = db.collection('users').doc(req.user.uid);
+  const userDoc = await userRef.get();
 
-  if (user) {
-    user.name = req.body.name || user.name;
-    user.email = req.body.email || user.email;
+  if (userDoc.exists) {
+    const updateData = {};
     
-    if (req.body.password) {
-      user.password = req.body.password;
+    if (req.body.name) {
+      updateData.name = req.body.name;
+      // Update display name in Firebase Auth
+      await auth.updateUser(req.user.uid, {
+        displayName: req.body.name
+      });
+    }
+    
+    if (req.body.email) {
+      updateData.email = req.body.email;
+      // Update email in Firebase Auth
+      await auth.updateUser(req.user.uid, {
+        email: req.body.email
+      });
     }
 
-    const updatedUser = await user.save();
+    await userRef.update(updateData);
+    
+    const updatedDoc = await userRef.get();
+    const userData = updatedDoc.data();
 
     res.json({
-      _id: updatedUser._id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      role: updatedUser.role,
-      token: generateToken(updatedUser._id),
+      uid: req.user.uid,
+      name: userData.name,
+      email: userData.email,
+      role: userData.role
     });
   } else {
     res.status(404);
@@ -124,7 +68,19 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
 // @route   GET /api/users
 // @access  Private/Admin
 export const getUsers = asyncHandler(async (req, res) => {
-  const users = await User.find({}).select('-password');
+  const usersSnapshot = await db.collection('users').get();
+  const users = [];
+  
+  usersSnapshot.forEach(doc => {
+    const userData = doc.data();
+    users.push({
+      uid: doc.id,
+      name: userData.name,
+      email: userData.email,
+      role: userData.role
+    });
+  });
+  
   res.json(users);
 });
 
@@ -132,10 +88,16 @@ export const getUsers = asyncHandler(async (req, res) => {
 // @route   GET /api/users/:id
 // @access  Private/Admin
 export const getUserById = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id).select('-password');
+  const userDoc = await db.collection('users').doc(req.params.id).get();
 
-  if (user) {
-    res.json(user);
+  if (userDoc.exists) {
+    const userData = userDoc.data();
+    res.json({
+      uid: userDoc.id,
+      name: userData.name,
+      email: userData.email,
+      role: userData.role
+    });
   } else {
     res.status(404);
     throw new Error('User not found');
@@ -146,20 +108,33 @@ export const getUserById = asyncHandler(async (req, res) => {
 // @route   PUT /api/users/:id
 // @access  Private/Admin
 export const updateUser = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id);
+  const userRef = db.collection('users').doc(req.params.id);
+  const userDoc = await userRef.get();
 
-  if (user) {
-    user.name = req.body.name || user.name;
-    user.email = req.body.email || user.email;
-    user.role = req.body.role || user.role;
+  if (userDoc.exists) {
+    const updateData = {
+      name: req.body.name,
+      email: req.body.email,
+      role: req.body.role
+    };
 
-    const updatedUser = await user.save();
+    await userRef.update(updateData);
+    
+    // Update Auth user if email changed
+    if (req.body.email) {
+      await auth.updateUser(req.params.id, {
+        email: req.body.email
+      });
+    }
+
+    const updatedDoc = await userRef.get();
+    const userData = updatedDoc.data();
 
     res.json({
-      _id: updatedUser._id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      role: updatedUser.role,
+      uid: updatedDoc.id,
+      name: userData.name,
+      email: userData.email,
+      role: userData.role
     });
   } else {
     res.status(404);
@@ -171,10 +146,12 @@ export const updateUser = asyncHandler(async (req, res) => {
 // @route   DELETE /api/users/:id
 // @access  Private/Admin
 export const deleteUser = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id);
+  const userRef = db.collection('users').doc(req.params.id);
+  const userDoc = await userRef.get();
 
-  if (user) {
-    await user.deleteOne();
+  if (userDoc.exists) {
+    await userRef.delete();
+    await auth.deleteUser(req.params.id);
     res.json({ message: 'User removed' });
   } else {
     res.status(404);

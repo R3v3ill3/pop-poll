@@ -1,6 +1,5 @@
-import jwt from 'jsonwebtoken';
+import { auth } from '../config/firebase.js';
 import asyncHandler from 'express-async-handler';
-import User from '../models/userModel.js';
 
 export const protect = asyncHandler(async (req, res, next) => {
   let token;
@@ -11,10 +10,14 @@ export const protect = asyncHandler(async (req, res, next) => {
       token = req.headers.authorization.split(' ')[1];
 
       // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-      // Get user from the token
-      req.user = await User.findById(decoded.id).select('-password');
+      const decodedToken = await auth.verifyIdToken(token);
+      
+      // Get user from token
+      req.user = {
+        uid: decodedToken.uid,
+        email: decodedToken.email,
+        role: decodedToken.role || 'user'
+      };
 
       next();
     } catch (error) {

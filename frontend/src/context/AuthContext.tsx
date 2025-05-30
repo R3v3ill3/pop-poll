@@ -1,13 +1,19 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import axios from 'axios';
-import { API_URL } from '../config';
+import { 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  User as FirebaseUser,
+  updateProfile
+} from 'firebase/auth';
+import { auth } from '../config/firebase';
 
 interface User {
-  _id: string;
-  name: string;
-  email: string;
+  uid: string;
+  name: string | null;
+  email: string | null;
   role: string;
-  token: string;
 }
 
 interface AuthContextType {
@@ -16,7 +22,7 @@ interface AuthContextType {
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,21 +33,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check for user in localStorage
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-        
-        // Set auth header for all future requests
-        axios.defaults.headers.common['Authorization'] = `Bearer ${parsedUser.token}`;
-      } catch (error) {
-        console.error('Failed to parse user from localStorage', error);
-        localStorage.removeItem('user');
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Convert Firebase user to our User type
+        setUser({
+          uid: firebaseUser.uid,
+          name: firebaseUser.displayName,
+          email: firebaseUser.email,
+          role: 'user' // Default role, you might want to fetch this from Firestore
+        });
+      } else {
+        setUser(null);
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -49,24 +56,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
     
     try {
-      const response = await axios.post(`${API_URL}/api/users/login`, {
-        email,
-        password,
-      });
-      
-      const userData = response.data;
-      setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
-      
-      // Set auth header for all future requests
-      axios.defaults.headers.common['Authorization'] = `Bearer ${userData.token}`;
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      // You might want to fetch additional user data from Firestore here
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        setError(error.response.data.message || 'Failed to login');
+      if (error instanceof Error) {
+        setError(error.message);
       } else {
         setError('An unexpected error occurred');
       }
-      console.error('Login error:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -77,36 +75,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setError(null);
     
     try {
-      const response = await axios.post(`${API_URL}/api/users`, {
-        name,
-        email,
-        password,
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Update profile with user's name
+      await updateProfile(userCredential.user, {
+        displayName: name
       });
-      
-      const userData = response.data;
-      setUser(userData);
-      localStorage.setItem('user', JSON.stringify(userData));
-      
-      // Set auth header for all future requests
-      axios.defaults.headers.common['Authorization'] = `Bearer ${userData.token}`;
+
+      // You might want to create a user document in Firestore here
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response) {
-        setError(error.response.data.message || 'Failed to register');
+      if (error instanceof Error) {
+        setError(error.message);
       } else {
         setError('An unexpected error occurred');
       }
-      console.error('Registration error:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
-    
-    // Remove auth header
-    delete axios.defaults.headers.common['Authorization'];
+  const logout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      if (error instanceof Error) {
+        setError(error.message);
+      }
+      throw error;
+    }
   };
 
   return (
