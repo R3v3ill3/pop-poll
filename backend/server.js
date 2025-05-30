@@ -7,13 +7,14 @@ import surveyRoutes from './routes/surveyRoutes.js';
 import panelRoutes from './routes/panelRoutes.js';
 import { connectDB } from './config/db.js';
 
+// Load env vars before connecting to DB
 dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
 
 // Connect to database
 connectDB();
-
-const app = express();
-const PORT = process.env.PORT || 5000; // Changed default port to 5000
 
 // Middleware
 app.use(cors());
