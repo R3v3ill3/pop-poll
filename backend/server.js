@@ -7,14 +7,11 @@ import surveyRoutes from './routes/surveyRoutes.js';
 import panelRoutes from './routes/panelRoutes.js';
 import { connectDB } from './config/db.js';
 
-// Load env vars before connecting to DB
+// Load env vars before anything else
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-// Connect to database
-connectDB();
 
 // Middleware
 app.use(cors());
@@ -34,7 +31,17 @@ app.get('/', (req, res) => {
 // Error handler middleware
 app.use(errorHandler);
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Connect to database and start server
+const startServer = async () => {
+  try {
+    await connectDB();
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
