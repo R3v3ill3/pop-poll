@@ -1,3 +1,4 @@
+import React from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import { BarChart2 } from 'lucide-react';
 
