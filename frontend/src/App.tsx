@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
+import { Toaster } from 'react-hot-toast';
 
 // Layouts
 import DashboardLayout from './layouts/DashboardLayout';
@@ -31,28 +32,31 @@ const App = () => {
   }
 
   return (
-    <Routes>
-      {/* Auth Routes */}
-      <Route path="/" element={<AuthLayout />}>
-        <Route index element={<Navigate to="/login\" replace />} />
-        <Route path="login" element={user ? <Navigate to="/dashboard\" replace /> : <Login />} />
-        <Route path="register" element={user ? <Navigate to="/dashboard\" replace /> : <Register />} />
-      </Route>
+    <>
+      <Toaster position="top-right" />
+      <Routes>
+        {/* Auth Routes */}
+        <Route path="/" element={<AuthLayout />}>
+          <Route index element={<Navigate to="/login" replace />} />
+          <Route path="login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+          <Route path="register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
+        </Route>
 
-      {/* Dashboard Routes - Protected */}
-      <Route path="/" element={user ? <DashboardLayout /> : <Navigate to="/login\" replace />}>
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="surveys" element={<Surveys />} />
-        <Route path="surveys/create" element={<CreateSurvey />} />
-        <Route path="surveys/:id" element={<SurveyDetail />} />
-        <Route path="panelists" element={<Panelists />} />
-        <Route path="reports" element={<Reports />} />
-        <Route path="settings" element={<Settings />} />
-      </Route>
+        {/* Dashboard Routes - Protected */}
+        <Route path="/" element={user ? <DashboardLayout /> : <Navigate to="/login" replace />}>
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="surveys" element={<Surveys />} />
+          <Route path="surveys/create" element={<CreateSurvey />} />
+          <Route path="surveys/:id" element={<SurveyDetail />} />
+          <Route path="panelists" element={<Panelists />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="settings" element={<Settings />} />
+        </Route>
 
-      {/* 404 Route */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        {/* 404 Route */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </>
   );
 };
 
