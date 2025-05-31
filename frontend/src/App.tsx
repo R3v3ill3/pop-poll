@@ -1,3 +1,4 @@
+import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { Toaster } from 'react-hot-toast';
@@ -37,13 +38,13 @@ const App = () => {
       <Routes>
         {/* Auth Routes */}
         <Route path="/" element={<AuthLayout />}>
-          <Route index element={<Navigate to="/login\" replace />} />
-          <Route path="login" element={user ? <Navigate to="/dashboard\" replace /> : <Login />} />
-          <Route path="register" element={user ? <Navigate to="/dashboard\" replace /> : <Register />} />
+          <Route index element={<Navigate to="/login" replace />} />
+          <Route path="login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+          <Route path="register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
         </Route>
 
         {/* Dashboard Routes - Protected */}
-        <Route path="/" element={user ? <DashboardLayout /> : <Navigate to="/login\" replace />}>
+        <Route path="/" element={user ? <DashboardLayout /> : <Navigate to="/login" replace />}>
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="surveys" element={<Surveys />} />
           <Route path="surveys/create" element={<CreateSurvey />} />
