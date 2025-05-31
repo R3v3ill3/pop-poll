@@ -2,22 +2,17 @@ import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Load env vars
 dotenv.config();
 
-// Ensure required environment variables are set
-if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_PRIVATE_KEY || !process.env.FIREBASE_CLIENT_EMAIL) {
-  throw new Error('Missing required Firebase configuration environment variables');
-}
-
-// Initialize Firebase Admin
+// Initialize Firebase Admin with service account
 const app = initializeApp({
-  credential: cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-  })
+  credential: cert(path.join(__dirname, 'pop-poll-firebase-adminsdk-fbsvc-39386d162a.json'))
 });
 
 export const db = getFirestore(app);

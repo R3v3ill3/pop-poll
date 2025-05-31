@@ -1,16 +1,16 @@
-# Dependencies
+# dependencies
 node_modules
-.pnp
+/.pnp
 .pnp.js
 
-# Testing
-coverage
+# testing
+/coverage
 
-# Production
-build
-dist
+# production
+/build
+/dist
 
-# Misc
+# misc
 .DS_Store
 .env
 .env.local
@@ -18,18 +18,18 @@ dist
 .env.test.local
 .env.production.local
 *.pem
-**/firebase-adminsdk*.json
+pop-poll-firebase-adminsdk-fbsvc-39386d162a.json
 
-# Debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Editor
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
 .idea
-.vscode
-*.swp
-*.swo
-
-# System
-Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
