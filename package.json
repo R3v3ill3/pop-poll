@@ -11,7 +11,7 @@
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "install-client": "cd frontend && npm install",
     "build-client": "cd frontend && npm run build",
-    "setup": "npm install && npm run install-client",
+    "setup": "node scripts/setup.js && npm install && npm run install-client",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
