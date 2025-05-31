@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Plus, 
   Search, 
@@ -150,7 +150,6 @@ const Panelists = () => {
                 <button className="text-red-600 hover:text-red-900">Delete</button>
               </td>
             </tr>
-            {/* Add more rows as needed */}
           </tbody>
         </table>
       </div>
