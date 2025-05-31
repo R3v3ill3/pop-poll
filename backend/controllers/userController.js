@@ -1,6 +1,80 @@
 import asyncHandler from 'express-async-handler';
 import { auth, db } from '../config/firebase.js';
 
+// @desc    Register a new user
+// @route   POST /api/users
+// @access  Public
+export const registerUser = asyncHandler(async (req, res) => {
+  const { email, password, name } = req.body;
+
+  // Check if user exists
+  const userExists = await auth.getUserByEmail(email).catch(() => null);
+  
+  if (userExists) {
+    res.status(400);
+    throw new Error('User already exists');
+  }
+
+  // Create user in Firebase Auth
+  const userRecord = await auth.createUser({
+    email,
+    password,
+    displayName: name,
+  });
+
+  // Create user document in Firestore
+  await db.collection('users').doc(userRecord.uid).set({
+    name,
+    email,
+    role: 'user',
+    createdAt: new Date().toISOString()
+  });
+
+  if (userRecord) {
+    res.status(201).json({
+      uid: userRecord.uid,
+      name: userRecord.displayName,
+      email: userRecord.email,
+      role: 'user'
+    });
+  } else {
+    res.status(400);
+    throw new Error('Invalid user data');
+  }
+});
+
+// @desc    Auth user & get token
+// @route   POST /api/users/login
+// @access  Public
+export const loginUser = asyncHandler(async (req, res) => {
+  const { idToken } = req.body;
+
+  try {
+    // Verify the ID token
+    const decodedToken = await auth.verifyIdToken(idToken);
+    
+    // Get the user's Firestore document
+    const userDoc = await db.collection('users').doc(decodedToken.uid).get();
+    
+    if (!userDoc.exists) {
+      res.status(404);
+      throw new Error('User not found');
+    }
+
+    const userData = userDoc.data();
+
+    res.json({
+      uid: decodedToken.uid,
+      name: userData.name,
+      email: userData.email,
+      role: userData.role
+    });
+  } catch (error) {
+    res.status(401);
+    throw new Error('Invalid credentials');
+  }
+});
+
 // @desc    Get user profile
 // @route   GET /api/users/profile
 // @access  Private
